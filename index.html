@@ -1,0 +1,169 @@
+<!doctype html>
+<html>
+  <head>
+    <title>Socket.IO chat</title>
+    <!--HTML code base template got off of socket.io chat: https://socket.io/get-started/chat-->
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 13px Helvetica, Arial; background-color: whitesmoke; }
+      form { background: #000; padding: 3px; position: fixed; bottom: 0; width: 100%; }
+      form input { border: 0; padding: 10px; width: 90%; margin-right: 0.5%; }
+      form button { width: 9%; background: rgb(130, 224, 255); border: none; padding: 10px; }
+      #messages { list-style-type: none; margin: 0.5%; padding: 0; border: 2px solid black; width: 70%; background-color: lightskyblue; display: flex; flex-direction: column;
+      float: left; overflow: auto; height: 90vh;}
+      #messages li { padding: 5px 10px; margin: 5px; margin-top: 1%; border: 2px solid black; border-radius: 2px; background-color: none;}
+      #messages li:nth-child(odd) { background: rgb(30, 197, 226); }
+      #messages li:nth-child(even) { background: rgb(93, 191, 236); }
+      #onlinestat { list-style-type: none; margin: 0.5%; padding: 1.5%; border: solid 2px black; width: 25%; text-align: center; background-color: lightsteelblue; height:90vh; overflow: auto; float: left; background-color: none;}
+      #onlinestat li:first-child {font: bold; font-style: italic; text-decoration: underline; font-size: 20px; margin-bottom: 1%; background-color: none;}
+      #user{margin: none; text-align: center; font-family: Verdana, Geneva, Tahoma, sans-serif; font-size: 13px;}
+    </style>
+  </head>
+  <body>
+
+    <p id='user'></p>
+    <ul id="messages"></ul>
+    <ul id="onlinestat"></ul>
+    <form action="">
+      <input id="m" autocomplete="off" /><button>Send</button>
+    </form>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script>
+        $(function () {
+          var socket = io();
+          $('form').submit(function(e){
+            e.preventDefault(); // prevents page reloading
+            if($("#m").val().includes("/color")){
+              //reference to material/code used to check if it is a valid hexadecimal color by the user Royi Namir
+              //https://stackoverflow.com/questions/8027423/how-to-check-if-a-string-is-a-valid-hex-color-representation/8027444
+              if((/^[0-9A-F]{6}$/i.test($('#m').val().split(" ")[1])) != false){
+                document.cookie = (document.cookie).split(",")[0] + "," + (document.cookie).split(",")[1].split("=")[0] + "=#" + $('#m').val().split(" ")[1];
+                console.log(document.cookie);
+                $('#messages').append($('<li>').text('Color has changed to '+"#" + $('#m').val().split(" ")[1]));
+                $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+              } 
+              else{
+                $('#messages').append($('<li>').text('Not a valid hexadecimal color, please try again!'));
+
+                //references/material used that help create the .animate methods: https://api.jquery.com/animate/
+                //reference/material which helped by the user Nick Craver: https://stackoverflow.com/questions/4249353/jquery-scroll-to-bottom-of-the-page#:~:text=You%20can%20just%20animate%20to,(%7B%20scrollTop%3A%20%24(document).
+                $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+              }
+            }
+            else if($('#m').val().includes("/name")){
+              if($('#m').val().includes(" ")){
+                var tempArray = $('#m').val().split(" ");
+                //console.log(tempArray);
+                //material/reference used to help make the tempArray if statement
+                //https://www.w3schools.com/jsref/jsref_length_array.asp
+                if (tempArray.length <= 2 && (tempArray[1].includes(",") != true) && tempArray[1]!=""){
+                  socket.id = $("#m").val().split(" ")[1];
+                  $("#user").text("You are now user "+socket.id+'.');
+                  socket.emit('nickname', $("#m").val().split(" ")[1]);
+                } 
+                else{
+                  $("#messages").append($("<li>").text("Invalid username as it contains a comma/space or no letters after the space, please try again."));
+                  $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+                }
+              }
+              else{
+                $("#messages").append($("<li>").text("Need to have a space between /name and your new username, please try again."));
+                $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+              }
+            }
+            else if($('#m').val()[0] != "/"){
+              var tempArray = $('#m').val().split(" ");
+              var messageStr = '';
+              var tempIndex;
+              console.log("temp array value: "+tempArray);
+
+              //references used to make the emojis:
+              //https://www.w3schools.com/charsets/ref_emoji.asp
+              //https://www.w3schools.com/html/html_emojis.asp
+
+              if(tempArray.includes(":)")){
+                tempIndex = tempArray.indexOf(":)");
+                tempArray[tempIndex] = '&#128513';
+              }
+              if(tempArray.includes(":o")){
+                tempIndex = tempArray.indexOf(":o");
+                tempArray[tempIndex] = '&#128562';
+              }
+              if(tempArray.includes(":(")){
+                tempIndex = tempArray.indexOf(":(");
+                tempArray[tempIndex] = '&#128577';
+              }
+              for(var i in tempArray){
+                messageStr += " " + tempArray[i];
+              }
+              console.log("messageStr value: "+messageStr);
+
+              //reference that was used for the html tag of <font>: https://www.w3schools.com/tags/tag_font.asp
+              socket.emit('chat message', "<font color=" + document.cookie.split("=")[2] + ">" + socket.id + "</font>:" + messageStr); //$('#m').val();
+            } 
+            else{
+              $("#messages").append($("<li>").text("Invalid command, please try again."));
+              $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+            }
+
+            $('#m').val('');
+            return false;
+          });
+
+          socket.on('chat message', function(msg){
+            if(msg.split(":")[0].split(">")[1].split("<")[0] != socket.id){
+              $('#messages').append($('<li>').html(msg));
+            } 
+            else{
+              $('#messages').append($('<li>').html("<b>" + msg + "</b>"));
+            }
+            $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+          });
+
+          socket.on('user online', function(id){
+            $("#onlinestat").append($("<li>").text(id));
+            $('#onlinestat').animate({scrollTop: $('#onlinestat').prop("scrollHeight")}, 0);
+          });
+
+          socket.on('update users', function(){
+            $("#onlinestat").empty();
+          });
+
+          socket.on('refuse nickname', function(){
+            $('#messages').append($('<li>').text('Nickname taken, username has not been changed. '));
+            $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+          });
+
+          socket.on('createCookie', function(){
+            socket.emit('check cookie', document.cookie);
+          });
+
+          socket.on('new Cookie', function(cookieData){
+            //material and references used to make the document.cookie stuff:
+            // -> https://developer.mozilla.org/en-US/docs/Web/API/Document/cookie
+            // -> https://www.w3schools.com/js/js_cookies.asp
+            document.cookie = "username=" + cookieData + ",color=#000000";
+          });
+
+          socket.on('change userData', function(newData){
+            socket.id=newData;
+          });
+
+          socket.on('nickname taken', function(val){
+              $('#messages').append($('<li>').text('Username has been taken, new username is '+val+'.'));
+              socket.id = val;
+              $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+          });
+
+          socket.on('check user', function(){
+            $('#user').text('you are user '+socket.id+'.');
+            $('#messages').append($('<li>').text('You are User ' + socket.id + '. '));
+            $('#messages').animate({scrollTop: $('#messages').prop("scrollHeight")}, 0);
+          });
+        });
+      </script>
+
+  </body>
+</html>
